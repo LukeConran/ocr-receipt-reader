@@ -1,1 +1,17 @@
-.venv
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+.DS_Store
+
+# User data — never commit scanned receipts or logs
+data/receipts.csv
+data/captures/
+*.csv
+!tests/fixtures/*.csv
