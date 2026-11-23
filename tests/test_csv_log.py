@@ -37,9 +37,26 @@ def test_append_does_not_overwrite(tmp_path: Path) -> None:
     assert rows[0] == list(CSV_COLUMNS)
     assert len(rows) == 4
     assert rows[1][1] == "Bananas"
-    assert rows[1][2] == "2.49"
+    assert rows[1][CSV_COLUMNS.index("price")] == "2.49"
+    assert rows[1][CSV_COLUMNS.index("food")] == "Bananas"
     assert rows[3][1] == "Bread"
     assert [r[1] for r in rows[1:]] == ["Bananas", "Milk", "Bread"]
+
+
+def test_legacy_header_is_upgraded_without_dropping_rows(tmp_path: Path) -> None:
+    path = tmp_path / "old.csv"
+    path.write_text(
+        "timestamp,item,price,merchant,source_image\n"
+        "2026-01-01T12:00:00,Bananas,2.49,HEB,a.jpg\n",
+        encoding="utf-8",
+    )
+    ensure_csv(path)
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert list(rows[0].keys()) == list(CSV_COLUMNS)
+    assert rows[0]["item"] == "Bananas"
+    assert rows[0]["food"] == "Bananas"
+    assert rows[0]["price"] == "2.49"
+    assert rows[0]["total"] == "2.49"
 
 
 def test_empty_append_is_noop(tmp_path: Path) -> None:

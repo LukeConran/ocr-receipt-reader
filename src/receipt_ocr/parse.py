@@ -67,10 +67,22 @@ QTY_PREFIX_RE = re.compile(
 )
 
 
+TAX_FLAG_RE = re.compile(r"(?:^|\s)([TFN])(?:\s*[TFN])?\s*$")
+FOOTER_TAX_RE = re.compile(r"^(?:sales\s*)?tax\b", re.I)
+FOOTER_SUBTOTAL_RE = re.compile(r"^sub[\s-]*total\b", re.I)
+FOOTER_TOTAL_RE = re.compile(r"^(?:grand\s*)?total\b|^amount\s*due\b", re.I)
+
+
 @dataclass
 class ReceiptItem:
     item: str
     price: float
+    taxable: bool | None = None
+    food: str = ""
+    category: str = "unknown"
+    include: bool = True
+    tax: float = 0.0
+    total: float = 0.0
 
 
 @dataclass
@@ -78,6 +90,10 @@ class ParsedReceipt:
     merchant: str | None
     items: list[ReceiptItem] = field(default_factory=list)
     raw_text: str = ""
+    subtotal: float | None = None
+    tax_total: float | None = None
+    receipt_total: float | None = None
+    kind: str = ""
 
 
 def _normalize_spaces(text: str) -> str:
@@ -105,15 +121,48 @@ def _looks_like_skip(line: str) -> bool:
     return any(token in lower for token in SKIP_CONTAINS)
 
 
-def _clean_description(desc: str) -> str:
+def _split_tax_flag(text: str) -> tuple[str, bool | None]:
+    """Pull a trailing T/F/N taxable flag used on many US grocery receipts."""
+    match = TAX_FLAG_RE.search(text.strip())
+    if not match:
+        return text, None
+    flag = match.group(1).upper()
+    trimmed = text[: match.start()].rstrip()
+    if flag == "T":
+        return trimmed, True
+    if flag in {"F", "N"}:
+        return trimmed, False
+    return text, None
+
+
+def _clean_description(desc: str) -> tuple[str, bool | None]:
     desc = desc.replace("*", " ")
     desc = re.sub(r"[|•·]+", " ", desc)
-    desc = re.sub(r"\s+[A-Z]\s*$", "", desc)  # trailing taxable flag (T / F)
+    desc, flagged = _split_tax_flag(desc)
     desc = re.sub(r"\s+\d{10,}\s*$", "", desc)  # long SKU / UPC at end
     desc = QTY_PREFIX_RE.sub("", desc)
     desc = _normalize_spaces(desc)
     desc = desc.strip(" -._")
-    return desc
+    return desc, flagged
+
+
+def _footer_amount(line: str) -> tuple[str | None, float | None]:
+    if FOOTER_TAX_RE.search(line):
+        prices = list(PRICE_RE.finditer(line))
+        if prices:
+            return "tax", _price_to_float(prices[-1].group(1))
+        return "tax", None
+    if FOOTER_SUBTOTAL_RE.search(line):
+        prices = list(PRICE_RE.finditer(line))
+        if prices:
+            return "subtotal", _price_to_float(prices[-1].group(1))
+        return "subtotal", None
+    if FOOTER_TOTAL_RE.search(line):
+        prices = list(PRICE_RE.finditer(line))
+        if prices:
+            return "total", _price_to_float(prices[-1].group(1))
+        return "total", None
+    return None, None
 
 
 def _is_plausible_item(name: str) -> bool:
@@ -180,9 +229,26 @@ def parse_receipt_text(text: str, merchant: str | None = None) -> ParsedReceipt:
     lines = [_normalize_spaces(ln) for ln in raw.splitlines()]
     items: list[ReceiptItem] = []
     pending_desc: str | None = None
+    subtotal: float | None = None
+    tax_total: float | None = None
+    receipt_total: float | None = None
 
     for line in lines:
         if not line:
+            pending_desc = None
+            continue
+
+        footer_kind, footer_amount = _footer_amount(line)
+        if footer_kind == "tax" and footer_amount is not None:
+            tax_total = footer_amount
+            pending_desc = None
+            continue
+        if footer_kind == "subtotal" and footer_amount is not None:
+            subtotal = footer_amount
+            pending_desc = None
+            continue
+        if footer_kind == "total" and footer_amount is not None:
+            receipt_total = footer_amount
             pending_desc = None
             continue
 
@@ -199,6 +265,7 @@ def parse_receipt_text(text: str, merchant: str | None = None) -> ParsedReceipt:
             pending_desc = None
             continue
 
+        remainder = line[last.end() :]
         desc = _normalize_spaces(line[: last.start()])
         if not desc and pending_desc:
             desc = pending_desc
@@ -210,13 +277,22 @@ def parse_receipt_text(text: str, merchant: str | None = None) -> ParsedReceipt:
         if _looks_like_skip(line):
             continue
 
-        desc = _clean_description(desc)
+        desc, flagged = _clean_description(desc)
+        if flagged is None:
+            _, flagged = _split_tax_flag(remainder)
         if not _is_plausible_item(desc):
             continue
         if abs(price) < 0.01:
             continue
 
-        items.append(ReceiptItem(item=desc, price=price))
+        items.append(ReceiptItem(item=desc, price=price, taxable=flagged, total=price))
 
     resolved_merchant = merchant if merchant is not None else detect_merchant(raw)
-    return ParsedReceipt(merchant=resolved_merchant, items=items, raw_text=raw)
+    return ParsedReceipt(
+        merchant=resolved_merchant,
+        items=items,
+        raw_text=raw,
+        subtotal=subtotal,
+        tax_total=tax_total,
+        receipt_total=receipt_total,
+    )

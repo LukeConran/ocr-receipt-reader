@@ -28,5 +28,5 @@ def test_ocr_synthetic_receipt_roundtrip(tmp_path: Path) -> None:
     written = append_items(csv_path, parsed.items, merchant=parsed.merchant, source_image=image_path)
     assert written == len(parsed.items)
     contents = csv_path.read_text(encoding="utf-8")
-    assert contents.startswith("timestamp,item,price,merchant,source_image")
+    assert contents.startswith("timestamp,item,food,category,price,tax,total,included,taxable,merchant,source_image")
     assert contents.count("\n") >= 2
