@@ -13,5 +13,6 @@ build/
 # User data — never commit scanned receipts or logs
 data/receipts.csv
 data/captures/
+data/catalog.json
 *.csv
 !tests/fixtures/*.csv

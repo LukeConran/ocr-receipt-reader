@@ -63,6 +63,10 @@ def test_grocery_pairs_and_skips_totals() -> None:
     assert all("visa" not in n for n in names)
     bananas = next(i for i in parsed.items if "banana" in i.item.lower())
     assert bananas.price == 2.49
+    turkey = next(i for i in parsed.items if "turkey" in i.item.lower())
+    assert turkey.taxable is True
+    assert parsed.tax_total == 1.83
+    assert parsed.subtotal == 26.13
 
 
 def test_restaurant_items() -> None:

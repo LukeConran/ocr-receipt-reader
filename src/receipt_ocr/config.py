@@ -7,7 +7,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 APP_NAME = "Receipt Scanner"
-CSV_COLUMNS = ("timestamp", "item", "price", "merchant", "source_image")
+CSV_COLUMNS = (
+    "timestamp",
+    "item",
+    "food",
+    "category",
+    "price",
+    "tax",
+    "total",
+    "included",
+    "taxable",
+    "merchant",
+    "source_image",
+)
 
 # Repo root: src/receipt_ocr/config.py → parents[2]
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

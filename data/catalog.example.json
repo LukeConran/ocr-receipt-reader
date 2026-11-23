@@ -1,0 +1,9 @@
+{
+  "aliases": {
+    "bnn org": "Banana",
+    "org strwbry": "Strawberry",
+    "heb meal simple ck": "Chicken"
+  },
+  "include_contains": ["kombucha"],
+  "exclude_contains": ["air fryer", "gift card"]
+}
